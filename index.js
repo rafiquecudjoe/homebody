@@ -171,6 +171,7 @@ function getSeason() {
   return { name: "Winter", note: "Time to restore and dream" };
 }
 
+app.get("/", (_req, res) => res.status(200).send("OK"));
 app.get("/healthz", (_req, res) => res.json({ ok: true, dailyUsage }));
 
 app.options("/api/chat", corsMw);
