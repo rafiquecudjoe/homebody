@@ -34,9 +34,9 @@ if (!ANTHROPIC_API_KEY) {
   process.exit(1);
 }
 
-const allowedOrigins = new Set(
-  ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
-);
+const rawOrigins = ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean);
+const openCors = rawOrigins.includes("*");
+const allowedOrigins = new Set(openCors ? [] : rawOrigins);
 
 log("info", "boot", {
   port: Number(PORT),
@@ -45,7 +45,7 @@ log("info", "boot", {
   rateLimit: `${RATE_LIMIT_MAX}/${Number(RATE_LIMIT_WINDOW_MS) / 1000}s`,
   dailyTokenCap: Number(DAILY_TOKEN_CAP),
   upstreamTimeoutMs: Number(UPSTREAM_TIMEOUT_MS),
-  allowedOrigins: [...allowedOrigins],
+  allowedOrigins: openCors ? "* (open)" : [...allowedOrigins],
   logLevel: LOG_LEVEL,
 });
 
@@ -97,10 +97,12 @@ app.use((req, res, next) => {
 });
 
 const corsMw = cors({
-  origin(origin, cb) {
-    if (!origin) return cb(null, false);
-    cb(null, allowedOrigins.has(origin));
-  },
+  origin: openCors
+    ? true
+    : (origin, cb) => {
+        if (!origin) return cb(null, false);
+        cb(null, allowedOrigins.has(origin));
+      },
   methods: ["POST", "OPTIONS"],
   maxAge: 600,
 });
@@ -179,7 +181,7 @@ app.post(
   express.json({ limit: "2mb" }),
   async (req, res) => {
     const origin = req.get("origin");
-    if (!origin || !allowedOrigins.has(origin)) {
+    if (!openCors && (!origin || !allowedOrigins.has(origin))) {
       log("warn", "origin_rejected", { reqId: req.id, origin, ip: req.ip });
       return res.status(403).json({ error: "Origin not allowed" });
     }
